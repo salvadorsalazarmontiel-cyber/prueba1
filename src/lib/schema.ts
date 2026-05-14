@@ -44,7 +44,7 @@ export const registrationSchema = z.object({
   tipoAmputacion: z.string().min(2, "Requerido"),
   fechaAmputacion: z.string(),
   ladoAfectado: z.enum(["Izquierdo", "Derecho", "Ambos"]),
-  nivelAmputacion: z.string().min(2, "Requerido"),
+  nivelAmputacion: z.string().optional().or(z.literal('')),
   tratamientosPrevios: z.string().optional().or(z.literal('')),
   observacionesAdicionales: z.string().optional().or(z.literal('')),
   tipoProtesis: z.enum(["Estática", "Normales", "Especiales"]),

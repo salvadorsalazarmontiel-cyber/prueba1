@@ -83,6 +83,11 @@ export function RegistrationForm() {
     }
   };
 
+  const onInvalid = (errors: any) => {
+    console.log("Errores de validación:", errors);
+    alert("Hay campos incompletos o incorrectos en el formulario. Por favor revisa que todo esté lleno correctamente.");
+  };
+
   type FieldName = keyof RegistrationFormData;
 
   const next = async () => {
@@ -105,7 +110,7 @@ export function RegistrationForm() {
         return;
       }
     } else if (currentStep === 4) {
-      fieldsToValidate = ['tipoAmputacion', 'fechaAmputacion', 'ladoAfectado', 'nivelAmputacion', 'tratamientosPrevios', 'observacionesAdicionales', 'tipoProtesis'];
+      fieldsToValidate = ['tipoAmputacion', 'fechaAmputacion', 'ladoAfectado', 'observacionesAdicionales', 'tipoProtesis'];
       if (medicalFiles.length < 3) {
         alert("Sube al menos 3 fotografías médicas.");
         return;
@@ -115,6 +120,11 @@ export function RegistrationForm() {
     const isStepValid = await trigger(fieldsToValidate as FieldName[]);
     if (isStepValid) {
       setCurrentStep((step) => step + 1);
+    } else {
+      // Find which fields failed
+      const currentErrors = Object.keys(errors).filter(key => fieldsToValidate.includes(key as FieldName));
+      alert("Por favor, llena todos los campos obligatorios de este paso correctamente.");
+      console.log("Campos inválidos en este paso:", currentErrors);
     }
   };
 
@@ -136,7 +146,7 @@ export function RegistrationForm() {
       {/* Indicador sutil arriba (opcional, solo decorativo de aero) */}
       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-300 via-teal-300 to-green-300 opacity-50" />
 
-      <form onSubmit={handleSubmit(processForm)} className="space-y-4">
+      <form onSubmit={handleSubmit(processForm, onInvalid)} className="space-y-4">
         
         <AnimatePresence mode="wait">
           {currentStep === 0 && (
@@ -235,6 +245,7 @@ export function RegistrationForm() {
                   <Info className="w-4 h-4" /> Asegúrate de subir fotos nítidas. Para menores, subir el INE del tutor.
                </div>
                <DropzoneUpload
+                 initialFiles={ineFiles}
                  onFilesChange={setIneFiles}
                  maxFiles={2}
                  maxSizeMB={5}
@@ -410,6 +421,7 @@ export function RegistrationForm() {
               <div className="mt-4">
                 <h3 className="font-medium text-sm mb-2 text-gray-800">Fotos y Video (Requerido)</h3>
                 <DropzoneUpload
+                  initialFiles={medicalFiles}
                   onFilesChange={setMedicalFiles}
                   maxFiles={6}
                   maxSizeMB={10}

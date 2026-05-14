@@ -6,6 +6,7 @@ import { UploadCloud, X, File as FileIcon, AlertCircle } from "lucide-react";
 import clsx from "clsx";
 
 interface DropzoneUploadProps {
+  initialFiles?: File[];
   onFilesChange: (files: File[]) => void;
   maxFiles?: number;
   maxSizeMB?: number;
@@ -15,6 +16,7 @@ interface DropzoneUploadProps {
 }
 
 export function DropzoneUpload({
+  initialFiles = [],
   onFilesChange,
   maxFiles = 5,
   maxSizeMB = 5,
@@ -26,7 +28,7 @@ export function DropzoneUpload({
   label = "Sube tus archivos",
   helperText = "Arrastra y suelta tus archivos aquí, o haz clic para seleccionarlos",
 }: DropzoneUploadProps) {
-  const [files, setFiles] = useState<File[]>([]);
+  const [files, setFiles] = useState<File[]>(initialFiles);
   const [error, setError] = useState<string | null>(null);
 
   const maxSizeBytes = maxSizeMB * 1024 * 1024;
