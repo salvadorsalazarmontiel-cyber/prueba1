@@ -134,7 +134,7 @@
 
 @layer utilities {
   .glass-panel {
-    @apply bg-white/40 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_0_rgba(31, 38, 135, 0.07)] dark:bg-black/40 dark:border-white/10;
+    @apply bg-white/40 backdrop-blur-xl border border-white/60 shadow-[0_8px_32px_0_#1f268712] dark:bg-black/40 dark:border-white/10;
   }
 
   .glass-card {
@@ -146,7 +146,7 @@
   }
 
   .glass-button-primary {
-    @apply bg-gradient-to-b from-purple-600 to-purple-800 border border-purple-500 shadow-md backdrop-blur-md hover:from-purple-500 hover:to-purple-700 transition-all text-white font-medium shadow-[inset_0_1px_0_rgba(255, 255, 255, 0.4)];
+    @apply bg-gradient-to-b from-purple-600 to-purple-800 border border-purple-500 shadow-md backdrop-blur-md hover:from-purple-500 hover:to-purple-700 transition-all text-white font-medium shadow-[inset_0_1px_0_#ffffff66];
   }
 
   .aero-bg {
