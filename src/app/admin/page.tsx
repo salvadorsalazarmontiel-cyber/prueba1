@@ -24,8 +24,11 @@ const ESTADOS = [
 ];
 
 export default function AdminDashboard() {
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLogged, setIsLogged] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [loginLoading, setLoginLoading] = useState(false);
   
   const [solicitudes, setSolicitudes] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -38,14 +41,40 @@ export default function AdminDashboard() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  const handleLogin = (e: React.FormEvent) => {
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setIsLogged(true);
+        fetchSolicitudes();
+      }
+      setCheckingSession(false);
+    };
+    checkSession();
+  }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === "admin123") {
+    setLoginLoading(true);
+    
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (error) {
+      alert("Correo o contraseña incorrectos");
+    } else {
       setIsLogged(true);
       fetchSolicitudes();
-    } else {
-      alert("Contraseña incorrecta");
     }
+    setLoginLoading(false);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setIsLogged(false);
+    setSolicitudes([]);
   };
 
   const fetchSolicitudes = async () => {
@@ -83,6 +112,14 @@ export default function AdminDashboard() {
     }
   };
 
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen aero-bg flex items-center justify-center p-4">
+        <Loader2 className="w-10 h-10 text-purple-600 animate-spin" />
+      </div>
+    );
+  }
+
   if (!isLogged) {
     return (
       <div className="min-h-screen aero-bg flex items-center justify-center p-4">
@@ -91,15 +128,26 @@ export default function AdminDashboard() {
             <Lock className="w-8 h-8 text-purple-600" />
           </div>
           <h1 className="text-2xl font-bold text-purple-900 mb-2">Acceso Admin</h1>
-          <p className="text-gray-500 text-sm mb-6">Ingresa la contraseña para gestionar las solicitudes de folios.</p>
+          <p className="text-gray-500 text-sm mb-6">Ingresa tus credenciales para gestionar solicitudes.</p>
+          <Input 
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="mb-4 text-center bg-white/70"
+            placeholder="admin@fundacion.org"
+            required
+          />
           <Input 
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="mb-4 text-center bg-white/70"
+            className="mb-6 text-center bg-white/70"
             placeholder="••••••••"
+            required
           />
-          <button type="submit" className="w-full py-3 glass-button-primary rounded-xl font-bold">Entrar</button>
+          <button type="submit" disabled={loginLoading} className="w-full py-3 glass-button-primary rounded-xl font-bold flex justify-center items-center gap-2 disabled:opacity-50">
+            {loginLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Entrar al Panel"}
+          </button>
         </form>
       </div>
     );
@@ -120,7 +168,7 @@ export default function AdminDashboard() {
             <FileText className="w-5 h-5" /> Solicitudes
           </a>
         </nav>
-        <button onClick={() => setIsLogged(false)} className="text-red-500 text-sm font-semibold hover:underline text-left">Cerrar Sesión</button>
+        <button onClick={handleLogout} className="text-red-500 text-sm font-semibold hover:underline text-left">Cerrar Sesión</button>
       </div>
 
       {/* Main Content */}

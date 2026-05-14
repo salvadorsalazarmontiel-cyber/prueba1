@@ -2,7 +2,7 @@
 
 import { RegistrationForm } from "@/components/RegistrationForm";
 import { motion, useScroll, useTransform, Variants } from "framer-motion";
-import { Heart, HandHeart, Users, ChevronDown, Mail, Phone, Search } from "lucide-react";
+import { Heart, HandHeart, Users, ChevronDown, Mail, Phone, Search, Lock } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -249,9 +249,11 @@ export default function Home() {
             </div>
           </div>
         </div>
-        <div className="text-center text-sm font-medium text-gray-500 pt-8 border-t border-gray-300 flex justify-center items-center gap-4">
+        <div className="text-center text-sm font-medium text-gray-500 pt-8 border-t border-gray-300 flex flex-col md:flex-row justify-center items-center gap-4">
           <span>© {new Date().getFullYear()} Fundación Manitas para To2. Todos los derechos reservados.</span>
-          <Link href="/admin" className="text-xs opacity-20 hover:opacity-100 transition-opacity">Admin</Link>
+          <Link href="/admin" className="text-xs text-purple-700 font-semibold px-4 py-2 rounded-full border border-purple-200 hover:bg-purple-50 transition-colors flex items-center gap-2 shadow-sm">
+            <Lock className="w-3 h-3" /> Acceso Admin
+          </Link>
         </div>
       </footer>
     </div>
