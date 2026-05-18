@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { registrationSchema, RegistrationFormData } from "@/lib/schema";
@@ -8,7 +8,8 @@ import { DropzoneUpload } from "./DropzoneUpload";
 import { SignaturePad } from "./SignaturePad";
 import { createBrowserClient } from '@supabase/ssr'
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronRight, ChevronLeft, Send, Info, Video } from "lucide-react";
+import { ChevronRight, ChevronLeft, Send, Info, Video, CheckCircle, Search, Home } from "lucide-react";
+import Link from "next/link";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,6 +33,8 @@ export function RegistrationForm() {
   const [medicalFiles, setMedicalFiles] = useState<File[]>([]);
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successFolio, setSuccessFolio] = useState<string | null>(null);
+  const formRef = useRef<HTMLDivElement>(null);
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -60,6 +63,36 @@ export function RegistrationForm() {
 
   const esMenor = watch("esMenor");
 
+  const uploadFile = async (file: File, bucket: string, folder: string) => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
+    const filePath = `${folder}/${fileName}`;
+
+    const { error } = await supabase.storage
+      .from(bucket)
+      .upload(filePath, file);
+
+    if (error) throw error;
+
+    const { data: { publicUrl } } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(filePath);
+
+    return publicUrl;
+  };
+
+  const dataURLtoFile = (dataurl: string, filename: string) => {
+    const arr = dataurl.split(',');
+    const mime = arr[0].match(/:(.*?);/)![1];
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new File([u8arr], filename, { type: mime });
+  };
+
   const processForm = async (data: RegistrationFormData) => {
     try {
       setIsSubmitting(true);
@@ -68,16 +101,55 @@ export function RegistrationForm() {
         setIsSubmitting(false);
         return;
       }
-      
-      console.log("Enviando...", data, ineFiles, medicalFiles);
-      
-      // Aquí el código para guardar en Supabase (Perfiles, Solicitudes, Medidas) y Storage.
-      // ...
-      
-      alert("¡Solicitud enviada con éxito! Tu número de folio es: MAN-2024-XXXXX");
+
+      const folio = `MAN-${new Date().getFullYear()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
+      // Subir INEs
+      const ineUrls = await Promise.all(
+        ineFiles.map(file => uploadFile(file, 'identificaciones', folio))
+      );
+
+      // Subir Evidencia Medica
+      const medicalUrls = await Promise.all(
+        medicalFiles.map(file => uploadFile(file, 'evidencia_medica', folio))
+      );
+
+      // Subir Firma
+      const signatureFile = dataURLtoFile(signatureData, `firma_${folio}.png`);
+      const signatureUrl = await uploadFile(signatureFile, 'firmas', folio);
+
+      const nombre_completo = `${data.nombre} ${data.apellidoPaterno} ${data.apellidoMaterno}`;
+
+      // Construir JSON de datos adicionales
+      const datosJson = {
+        ...data,
+        ineUrls,
+        medicalUrls,
+        signatureUrl
+      };
+
+      const { error } = await supabase
+        .from('solicitudes')
+        .insert([
+          {
+            folio: folio,
+            nombre_completo: nombre_completo,
+            email: data.email,
+            telefono: data.telefonoContacto,
+            es_menor: data.esMenor,
+            estado: 'En revisión',
+            requiere_documentos: false,
+            datos_json: datosJson
+          }
+        ]);
+
+      if (error) throw error;
+
+      setSuccessFolio(folio);
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (error) {
-      console.error(error);
-      alert("Hubo un error al enviar la solicitud.");
+      console.error("Error al procesar solicitud:", error);
+      alert("Hubo un error al enviar la solicitud. Por favor intenta de nuevo.");
     } finally {
       setIsSubmitting(false);
     }
@@ -92,7 +164,7 @@ export function RegistrationForm() {
 
   const next = async () => {
     let fieldsToValidate: FieldName[] = [];
-    
+
     if (currentStep === 0) {
       fieldsToValidate = ['nombre', 'apellidoPaterno', 'apellidoMaterno', 'fechaNacimiento', 'email', 'telefonoContacto', 'telefonoAlternativo', 'esMenor'];
       if (esMenor) fieldsToValidate.push('nombreTutor', 'parentescoTutor');
@@ -120,6 +192,7 @@ export function RegistrationForm() {
     const isStepValid = await trigger(fieldsToValidate as FieldName[]);
     if (isStepValid) {
       setCurrentStep((step) => step + 1);
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } else {
       // Find which fields failed
       const currentErrors = Object.keys(errors).filter(key => fieldsToValidate.includes(key as FieldName));
@@ -131,6 +204,7 @@ export function RegistrationForm() {
   const prev = () => {
     if (currentStep > 0) {
       setCurrentStep((step) => step - 1);
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   };
 
@@ -140,14 +214,49 @@ export function RegistrationForm() {
     exit: { opacity: 0, x: -20, transition: { duration: 0.2 } }
   };
 
+  if (successFolio) {
+    return (
+      <section ref={formRef} className="w-full max-w-4xl mx-auto p-8 md:p-12 glass-panel rounded-3xl overflow-hidden relative text-center">
+        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-green-300 via-teal-400 to-green-500" />
+        <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center justify-center space-y-6">
+          <div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4 shadow-inner">
+            <CheckCircle className="w-12 h-12" />
+          </div>
+          <h2 className="text-3xl font-extrabold text-gray-800">¡Solicitud Enviada con Éxito!</h2>
+          <p className="text-gray-600 max-w-lg mx-auto">
+            Hemos recibido todos tus datos y documentos correctamente. Tu caso ya está en nuestra base de datos y pronto nuestro equipo lo revisará.
+          </p>
+
+          <div className="bg-white/80 p-6 rounded-2xl border border-green-200 shadow-sm inline-block min-w-[280px]">
+            <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-2">Tu Número de Folio</p>
+            <p className="text-3xl font-black text-teal-700 tracking-widest">{successFolio}</p>
+          </div>
+
+          <p className="text-sm text-gray-500 mt-4 mb-8">
+            Anótalo o tómale una captura de pantalla. Lo necesitarás para consultar el estado de tu prótesis.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-4 w-full justify-center mt-8">
+            <Link href="/" className="px-6 py-3 glass-button rounded-xl flex items-center justify-center gap-2 font-medium text-gray-700">
+              <Home className="w-5 h-5" /> Regresar al Inicio
+            </Link>
+            <Link href="/seguimiento" className="px-6 py-3 glass-button-primary rounded-xl flex items-center justify-center gap-2 font-bold aero-glow">
+              <Search className="w-5 h-5" /> Rastrear mi Folio
+            </Link>
+          </div>
+        </motion.div>
+      </section>
+    );
+  }
+
   return (
-    <section className="w-full max-w-4xl mx-auto p-5 md:p-8 glass-panel rounded-3xl overflow-hidden relative">
-      
+    <section ref={formRef} className="w-full max-w-4xl mx-auto p-5 md:p-8 glass-panel rounded-3xl overflow-hidden relative">
+
       {/* Indicador sutil arriba (opcional, solo decorativo de aero) */}
       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-300 via-teal-300 to-green-300 opacity-50" />
 
       <form onSubmit={handleSubmit(processForm, onInvalid)} className="space-y-4">
-        
+
         <AnimatePresence mode="wait">
           {currentStep === 0 && (
             <motion.div key="step0" variants={formVariants} initial="hidden" animate="visible" exit="exit" className="space-y-4">
@@ -237,21 +346,21 @@ export function RegistrationForm() {
 
           {currentStep === 1 && (
             <motion.div key="step1" variants={formVariants} initial="hidden" animate="visible" exit="exit" className="space-y-4">
-               <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                 <span className="bg-blue-100 text-blue-700 w-8 h-8 rounded-full flex items-center justify-center text-sm shadow-inner">2</span>
-                 Identificación
-               </h2>
-               <div className="bg-amber-50/70 p-3 rounded-lg text-amber-800 text-xs border border-amber-200/50 flex items-center gap-2">
-                  <Info className="w-4 h-4" /> Asegúrate de subir fotos nítidas. Para menores, subir el INE del tutor.
-               </div>
-               <DropzoneUpload
-                 initialFiles={ineFiles}
-                 onFilesChange={setIneFiles}
-                 maxFiles={2}
-                 maxSizeMB={5}
-                 label="Frente y Reverso del INE"
-                 helperText="Formatos JPG/PNG/PDF. Máximo 5MB."
-               />
+              <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                <span className="bg-blue-100 text-blue-700 w-8 h-8 rounded-full flex items-center justify-center text-sm shadow-inner">2</span>
+                Identificación
+              </h2>
+              <div className="bg-amber-50/70 p-3 rounded-lg text-amber-800 text-xs border border-amber-200/50 flex items-center gap-2">
+                <Info className="w-4 h-4" /> Asegúrate de subir fotos nítidas. Para menores, subir el INE del tutor.
+              </div>
+              <DropzoneUpload
+                initialFiles={ineFiles}
+                onFilesChange={setIneFiles}
+                maxFiles={2}
+                maxSizeMB={5}
+                label="Frente y Reverso del INE"
+                helperText="Formatos JPG/PNG/PDF. Máximo 5MB."
+              />
             </motion.div>
           )}
 
@@ -313,14 +422,14 @@ export function RegistrationForm() {
                 <span className="bg-blue-100 text-blue-700 w-8 h-8 rounded-full flex items-center justify-center text-sm shadow-inner">4</span>
                 Autorizaciones
               </h2>
-              
+
               <div className="space-y-3 bg-white/40 p-4 rounded-xl border border-white/50">
                 <h3 className="font-medium text-sm text-gray-800">Uso de Imagen</h3>
                 <p className="text-xs text-gray-600">Autorizo a la Fundación a utilizar imágenes para fines de difusión.</p>
                 <div className="flex items-center space-x-2">
                   <Controller name="aceptaUsoImagen" control={control} render={({ field }) => (
                     <Checkbox id="aceptaUsoImagen" checked={field.value} onCheckedChange={field.onChange} />
-                  )}/>
+                  )} />
                   <Label htmlFor="aceptaUsoImagen" className="text-xs cursor-pointer">Acepto los términos</Label>
                 </div>
                 {errors.aceptaUsoImagen && <p className="text-xs text-red-500">{errors.aceptaUsoImagen.message}</p>}
@@ -332,13 +441,13 @@ export function RegistrationForm() {
                 <div className="flex items-center space-x-2 mt-2">
                   <Controller name="aceptaUsoProtesis" control={control} render={({ field }) => (
                     <Checkbox id="aceptaUsoProtesis" checked={field.value} onCheckedChange={field.onChange} />
-                  )}/>
+                  )} />
                   <Label htmlFor="aceptaUsoProtesis" className="text-xs cursor-pointer">Acepto los términos de uso</Label>
                 </div>
                 <div className="flex items-center space-x-2 mt-2">
                   <Controller name="comprendeDonacion" control={control} render={({ field }) => (
                     <Checkbox id="comprendeDonacion" checked={field.value} onCheckedChange={field.onChange} />
-                  )}/>
+                  )} />
                   <Label htmlFor="comprendeDonacion" className="text-xs cursor-pointer">Comprendo que es de donación</Label>
                 </div>
               </div>
@@ -357,7 +466,7 @@ export function RegistrationForm() {
                 <span className="bg-blue-100 text-blue-700 w-8 h-8 rounded-full flex items-center justify-center text-sm shadow-inner">5</span>
                 Información Médica
               </h2>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <Label htmlFor="tipoAmputacion" className="text-xs">Condición médica</Label>
@@ -443,11 +552,11 @@ export function RegistrationForm() {
                 <span className="bg-blue-100 text-blue-700 w-8 h-8 rounded-full flex items-center justify-center text-sm shadow-inner">6</span>
                 Medidas
               </h2>
-              
+
               <div className="glass-card rounded-xl p-4 flex flex-col md:flex-row items-center gap-4 bg-gradient-to-r from-blue-50/50 to-teal-50/50">
                 <div className="flex-shrink-0 w-full md:w-32 aspect-video bg-gray-900 rounded-lg overflow-hidden relative shadow-md flex items-center justify-center">
-                   <div className="absolute inset-0 bg-blue-900 opacity-60"></div>
-                   <Video className="text-white opacity-80 w-8 h-8 z-10" />
+                  <div className="absolute inset-0 bg-blue-900 opacity-60"></div>
+                  <Video className="text-white opacity-80 w-8 h-8 z-10" />
                 </div>
                 <div className="text-sm">
                   <h4 className="font-semibold text-gray-800">Tutorial de Medidas</h4>
@@ -487,12 +596,12 @@ export function RegistrationForm() {
 
         {/* Stepper Sutil y Controles */}
         <div className="pt-6 mt-4 border-t border-gray-200/50 flex flex-col md:flex-row justify-between items-center gap-4">
-          
+
           {/* Stepper abajo y chiquito */}
           <div className="flex gap-1.5 md:order-2">
             {steps.map((_, idx) => (
-              <div 
-                key={idx} 
+              <div
+                key={idx}
                 className={`h-1.5 rounded-full transition-all duration-300 ${currentStep === idx ? 'w-6 bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]' : currentStep > idx ? 'w-4 bg-teal-400' : 'w-2 bg-gray-300/50'}`}
               />
             ))}
@@ -507,7 +616,7 @@ export function RegistrationForm() {
             >
               <ChevronLeft className="w-4 h-4" /> Atrás
             </button>
-            
+
             {currentStep === steps.length - 1 ? (
               <button
                 type="submit"
